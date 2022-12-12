@@ -2,7 +2,6 @@ import random
 import socket
 import struct
 import threading
-from time import sleep
 
 
 class Client:
@@ -12,39 +11,29 @@ class Client:
     BUFFER_SIZE = 1024
 
     def __init__(self):
-        self.ip = (socket.gethostbyname(socket.gethostname()), self.CLIENT_PORT)
         self.server_address_port = None
         self.client_socket = self.create_socket(('', self.CLIENT_PORT), True)
         self.server_socket = None
         self.tr_server = None
-        self.tr_choice = None
-        self.numbers = []
+        self.max_number = 0
         if not self.check_server():
-            self.send_cmd_to_rnd()
+            pass
+            # self.create_server()
+            # self.check_server()
 
     def send_cmd_to_rnd(self):
-        print('sending gen command')
-        self.client_socket.sendto('~gen_num'.encode('utf-8'), (self.MCAST_GRP, self.CLIENT_PORT))
+        self.client_socket.sendto(
+            '~gen_num'.encode('utf-8'),
+            (self.MCAST_GRP, self.CLIENT_PORT))
 
     def send_number(self):
-        self.numbers = []
         number = random.randint(0, 100)
-        print('sending number')
-        self.client_socket.sendto(str(number).encode('utf-8'), (self.MCAST_GRP, self.CLIENT_PORT))
-        self.tr_choice = threading.Thread(target=self.choice_host)
-        self.tr_choice.start()
-
-    def choice_host(self):
-        sleep(0.5)
-        print('choosing proc start')
-        self.server_address_port = sorted(self.numbers, key=lambda item: item[0], reverse=True)[0][1]
-        print(self.server_address_port, self.ip)
-        if self.ip == self.server_address_port:
-            self.create_server()
-            self.check_server()
-        return
+        self.client_socket.sendto(
+            str(number).encode('utf-8'),
+            (self.MCAST_GRP, self.CLIENT_PORT))
 
     def create_server(self):
+        self.send_number()
         self.server_socket = self.create_socket(('', self.MCAST_PORT))
         self.tr_server = threading.Thread(target=self.server_loop)
         self.tr_server.start()
@@ -57,10 +46,9 @@ class Client:
             proto=socket.IPPROTO_UDP)
         listen_socket.bind(address)
         group = socket.inet_aton(self.MCAST_GRP)
-        listen_socket.setsockopt(
-            socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, struct.pack('4sL', group, socket.INADDR_ANY))
+        listen_socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, struct.pack('4sL', group, socket.INADDR_ANY))
         if timeout:
-            listen_socket.settimeout(0.5)
+            listen_socket.settimeout(1)
         return listen_socket
 
     def check_server(self):
@@ -81,6 +69,8 @@ class Client:
         while True:
             message, address = self.server_socket.recvfrom(self.BUFFER_SIZE)
             print(f'Message from Client: {message.decode(encoding="utf-8")}', f'\nClient IP Address: {address}')
+            if message.decode('utf-8') == "~gen_num":
+                print('generate and send')
             self.server_socket.sendto(message, (self.MCAST_GRP, self.CLIENT_PORT))
 
     def send_msg(self, msg: bytes):
@@ -91,15 +81,7 @@ class Client:
             try:
                 data, address = self.client_socket.recvfrom(self.BUFFER_SIZE)
                 if data:
-                    if data.decode('utf-8') == "~gen_num":
-                        print('received gen command')
-                        self.send_number()
-                    elif data.decode('utf-8').isnumeric():
-                        print('received number')
-                        num = int(data.decode('utf-8'))
-                        self.numbers.append((num, address))
-                    else:
-                        print(f'Message from Server: {data.decode("utf-8")}')
+                    print(f'Message from Server: {data.decode("utf-8")}')
             except:
                 continue
 
@@ -117,7 +99,6 @@ class Client:
         tr_listen.join()
         tr_send.join()
         self.tr_server.join()
-        self.tr_choice.join()
 
 
 if __name__ == '__main__':
