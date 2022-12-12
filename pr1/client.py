@@ -1,36 +1,71 @@
 import socket
+import struct
 import threading
 
 
 class Client:
+    MCAST_GRP = '224.3.29.71'
+    MCAST_PORT = 5010
+    CLIENT_PORT = 5011
+    BUFFER_SIZE = 1024
+
     def __init__(self):
-        self.server_address_port = ("192.168.1.118", 5010)
-        self.broadcast_address_port = ("192.168.1.118", 5010)
-        self.buffer_size = 1024
-        self.udp_client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        hostname = socket.gethostname()
-        ip = socket.gethostbyname(hostname)
-        self.udp_client_socket.bind((ip, 5011))
+        self.server_address_port = None
+        self.broadcast_listen_socket = self.create_socket(('', self.CLIENT_PORT), True)
+        self.server_socket = None
+        self.tr_server = None
+        if not self.check_server():
+            self.create_server()
+            self.check_server()
 
-        self.name = 'skipper'.encode()
-        # self.search_server()
+    def create_server(self):
+        self.server_socket = self.create_socket(('', self.MCAST_PORT))
+        self.tr_server = threading.Thread(target=self.server_loop)
+        self.tr_server.start()
+        print('server started')
 
-        self.hello_msg = f"client connected"
-        self.byte_hello_msg = self.hello_msg.encode()
-        self.send_msg(self.byte_hello_msg)
+    def create_socket(self, address, timeout=False):
+        listen_socket = socket.socket(
+            family=socket.AF_INET,
+            type=socket.SOCK_DGRAM,
+            proto=socket.IPPROTO_UDP)
+        listen_socket.bind(address)
+        group = socket.inet_aton(self.MCAST_GRP)
+        listen_socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, struct.pack('4sL', group, socket.INADDR_ANY))
+        if timeout:
+            listen_socket.settimeout(1)
+        return listen_socket
 
-    def search_server(self):
-        self.udp_client_socket.sendto(self.name, self.broadcast_address_port)
+    def check_server(self):
+        self.broadcast_listen_socket.sendto("client connected".encode(), (self.MCAST_GRP, self.MCAST_PORT))
+        try:
+            data, address = self.broadcast_listen_socket.recvfrom(self.BUFFER_SIZE)
+        except TimeoutError:
+            print('create server')
+            return False
+        else:
+            print('server exists')
+            print(data.decode('utf-8'))
+            print(address)
+            self.server_address_port = address
+            return True
+
+    def server_loop(self):
+        while True:
+            message, address = self.server_socket.recvfrom(self.BUFFER_SIZE)
+            # print(f'Message from Client: {message.decode(encoding="utf-8")}')
+            # print(f'Client IP Address: {address}')
+            self.server_socket.sendto(message, (self.MCAST_GRP, self.CLIENT_PORT))
 
     def send_msg(self, msg: bytes):
-        self.udp_client_socket.sendto(msg, self.server_address_port)
+        self.broadcast_listen_socket.sendto(msg, self.server_address_port)
 
     def receive_msg(self):
         while True:
             try:
-                msg_from_server = self.udp_client_socket.recvfrom(self.buffer_size)
-                if msg_from_server:
-                    print(f'Message from Server: {msg_from_server[0]}')
+                data, address = self.broadcast_listen_socket.recvfrom(self.BUFFER_SIZE)
+                if data:
+                    print(f'Message from Server: {data.decode("utf-8")}')
             except:
                 continue
 
@@ -38,15 +73,18 @@ class Client:
         while True:
             msg = input()
             if msg:
-                self.send_msg(msg.encode())
+                self.send_msg(msg.encode('utf-8'))
+
+    def run(self):
+        tr_listen = threading.Thread(target=self.receive_msg)
+        tr_send = threading.Thread(target=self.get_input)
+        tr_listen.start()
+        tr_send.start()
+        tr_listen.join()
+        tr_send.join()
+        self.tr_server.join()
 
 
 if __name__ == '__main__':
     client = Client()
-    tr_listen = threading.Thread(target=client.receive_msg)
-    tr_send = threading.Thread(target=client.get_input)
-    tr_listen.start()
-    tr_send.start()
-    tr_listen.join()
-    tr_send.join()
-
+    client.run()
