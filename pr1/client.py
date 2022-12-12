@@ -1,3 +1,4 @@
+import random
 import socket
 import struct
 import threading
@@ -14,11 +15,24 @@ class Client:
         self.broadcast_listen_socket = self.create_socket(('', self.CLIENT_PORT), True)
         self.server_socket = None
         self.tr_server = None
+        self.max_number = 0
         if not self.check_server():
             self.create_server()
             self.check_server()
 
+    def send_cmd_to_rnd(self):
+        self.broadcast_listen_socket.sendto(
+            '~gen_num'.encode('utf-8'),
+            (self.MCAST_GRP, self.CLIENT_PORT))
+
+    def send_number(self):
+        number = random.randint(0, 100)
+        self.broadcast_listen_socket.sendto(
+            str(number).encode('utf-8'),
+            (self.MCAST_GRP, self.CLIENT_PORT))
+
     def create_server(self):
+
         self.server_socket = self.create_socket(('', self.MCAST_PORT))
         self.tr_server = threading.Thread(target=self.server_loop)
         self.tr_server.start()
@@ -55,6 +69,8 @@ class Client:
             message, address = self.server_socket.recvfrom(self.BUFFER_SIZE)
             # print(f'Message from Client: {message.decode(encoding="utf-8")}')
             # print(f'Client IP Address: {address}')
+            if message.decode('utf-8') == "~gen_num":
+                print('generate and send')
             self.server_socket.sendto(message, (self.MCAST_GRP, self.CLIENT_PORT))
 
     def send_msg(self, msg: bytes):
