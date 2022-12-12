@@ -95,9 +95,6 @@ for i in range(10):
     res += f"\n{i}\nРезультат при работе с блокировкой {protected_resource}"
     res += f"\nРезультат без блокировки {unprotected_resource}"
     res += f'\nравенство результатов {protected_resource == unprotected_resource}'
-    # print(f"\nРезультат при работе с блокировкой {protected_resource}")
-    # print(f"Результат без блокировки {unprotected_resource}")
-    # print(f'равенство результатов {protected_resource == unprotected_resource}')
 
 os.system('cls')
 print(res)
