@@ -76,7 +76,7 @@ class Client:
             return False
         else:
             # print('server exists')
-            # print('data:', data.decode('utf-8'))
+            # print('data1:', data1.decode('utf-8'))
             # print('addr', address)
             self.server_address_port = address
             return True
